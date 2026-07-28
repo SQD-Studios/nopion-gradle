@@ -13,16 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.papermc.fill.model.request;
+package io.papermc.fill.model.response;
 
-import io.papermc.fill.model.Download;
-import java.util.UUID;
+import java.net.URI;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
-public record UploadRequest(
-  UUID id,
-  Download download,
-  String contentMd5
+public record UploadResponse(
+  boolean ok,
+  URI url
 ) {
 }

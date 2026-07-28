@@ -25,6 +25,8 @@ import io.papermc.fill.model.Checksums;
 import io.papermc.fill.model.Commit;
 import io.papermc.fill.model.Download;
 import io.papermc.fill.model.request.PublishRequest;
+import io.papermc.fill.model.request.UploadRequest;
+import io.papermc.fill.model.response.UploadResponse;
 import io.papermc.fill.model.response.v3.BuildResponse;
 import io.papermc.fill.model.response.v3.VersionResponse;
 import java.io.File;
@@ -33,12 +35,14 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -117,52 +121,29 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
 
     final List<Commit> commits = this.gatherCommits(git, extension);
 
+    if (!extension.getApiToken().isPresent()) {
+      throw new GradleException("API token is not present");
+    }
+    final String apiToken = extension.getApiToken().get();
     final UUID id = UUID.randomUUID();
-    final List<HttpRequest> requests = new ArrayList<>();
+    final Map<String, Download> downloads = new HashMap<>();
+    final List<PendingUpload> uploads = new ArrayList<>();
     try {
-      final Map<String, Download> downloads = new HashMap<>();
-
       for (final FillExtension.Download download : build.getDownloads()) {
         final String key = download.getName();
         final String name = download.getNameResolver().get().name(project, familyId, versionId, buildId);
         final Path path = download.getFile().get().getAsFile().toPath();
-
         final byte[] content = Files.readAllBytes(path);
         final String sha256 = Hashing.sha256().hashBytes(content).toString();
-        final int size = (int) Files.size(path);
-        downloads.put(key, new Download(name, new Checksums(sha256), size));
-
-        final HttpRequest.Builder builder = HttpRequest.newBuilder();
-        builder.header("User-Agent", USER_AGENT);
-        builder.header("Content-Type", "multipart/form-data; boundary=boundary");
-        builder.uri(URI.create(extension.getApiUrl().get() + "/upload"));
-
-        final List<byte[]> requestParts = new ArrayList<>();
-        requestParts.add(("--boundary\r\nContent-Disposition: form-data; name=\"request\"\r\nContent-Type: application/json\r\n\r\n{\"id\":\"" + id + "\"}\r\n").getBytes(StandardCharsets.UTF_8));
-        requestParts.add(("--boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + name + "\"\r\n\r\n").getBytes(StandardCharsets.UTF_8));
-        requestParts.add(content);
-        requestParts.add(("\r\n--boundary").getBytes(StandardCharsets.UTF_8));
-
-        builder.POST(HttpRequest.BodyPublishers.ofByteArrays(requestParts));
-
-        if (extension.getApiToken().isPresent()) {
-          builder.header("Authorization", extension.getApiToken().get());
-        } else {
-          throw new GradleException("API token is not present");
-        }
-
-        requests.add(builder.build());
+        final int size = content.length;
+        final Download requestDownload = new Download(name, new Checksums(sha256), size);
+        downloads.put(key, requestDownload);
+        uploads.add(new PendingUpload(requestDownload, content, contentMd5(content)));
       }
 
-      for (final HttpRequest request : requests) {
-        try {
-          final HttpResponse<String> response = this.httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-          if (response.statusCode() != 200) {
-            throw new GradleException("Failed to post data to the API: " + response.statusCode() + ": " + response.body());
-          }
-        } catch (final Exception e) {
-          throw new GradleException("Failed to post data to the API", e);
-        }
+      for (final PendingUpload upload : uploads) {
+        final URI uploadUrl = this.requestUploadUrl(extension, apiToken, id, upload);
+        this.upload(uploadUrl, upload);
       }
 
       final PublishRequest request = new PublishRequest(
@@ -176,32 +157,79 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
         commits.reversed(),
         downloads
       );
-
-      try {
-        final HttpRequest.Builder builder = HttpRequest.newBuilder()
-          .uri(URI.create(extension.getApiUrl().get() + "/publish"))
-          .header("Content-Type", "application/json")
-          .header("User-Agent", USER_AGENT);
-        builder.POST(HttpRequest.BodyPublishers.ofString(MapperHolder.MAPPER.writeValueAsString(request)));
-        if (extension.getApiToken().isPresent()) {
-          builder.headers("Authorization", extension.getApiToken().get());
-        } else {
-          throw new GradleException("Api token is not present.");
-        }
-
-        final HttpRequest post = builder.build();
-        final HttpResponse<String> response = this.httpClient.send(post, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 201) {
-          throw new GradleException("Failed to post data to the API: " + response.statusCode() + ": " + response.body());
-        }
-      } catch (final Exception e) {
-        throw new GradleException("Failed to post data to the API: " + e.getMessage(), e);
-      }
+      this.publish(extension, apiToken, request);
     } catch (final JsonProcessingException e) {
-      throw new GradleException("Failed to serialize json", e);
+      throw new GradleException("Failed to serialize JSON", e);
     } catch (final IOException e) {
-      throw new GradleException("Failed to read file", e);
+      throw new GradleException("Failed to publish files", e);
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new GradleException("Publishing was interrupted", e);
     }
+  }
+
+  private URI requestUploadUrl(
+    final FillExtension extension,
+    final String apiToken,
+    final UUID id,
+    final PendingUpload upload
+  ) throws IOException, InterruptedException {
+    final UploadRequest request = new UploadRequest(id, upload.download(), upload.contentMd5());
+    final HttpRequest httpRequest = HttpRequest.newBuilder()
+      .uri(URI.create(extension.getApiUrl().get() + "/v3/upload"))
+      .header("Authorization", apiToken)
+      .header("Content-Type", "application/json")
+      .header("User-Agent", USER_AGENT)
+      .POST(HttpRequest.BodyPublishers.ofString(MapperHolder.MAPPER.writeValueAsString(request)))
+      .build();
+    final HttpResponse<String> response = this.httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+    if (response.statusCode() != 200) {
+      throw new IOException("Failed to create upload URL: " + response.statusCode() + ": " + response.body());
+    }
+    return MapperHolder.MAPPER.readValue(response.body(), UploadResponse.class).url();
+  }
+
+  private void upload(final URI uploadUrl, final PendingUpload upload) throws IOException, InterruptedException {
+    final HttpRequest request = HttpRequest.newBuilder()
+      .uri(uploadUrl)
+      .header("Content-MD5", upload.contentMd5())
+      .header("Content-Type", "application/java-archive")
+      .header("x-amz-meta-sha256", upload.download().checksums().sha256())
+      .PUT(HttpRequest.BodyPublishers.ofByteArray(upload.content()))
+      .build();
+    final HttpResponse<String> response = this.httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    if (response.statusCode() / 100 != 2) {
+      throw new IOException("Failed to upload file: " + response.statusCode() + ": " + response.body());
+    }
+  }
+
+  private void publish(
+    final FillExtension extension,
+    final String apiToken,
+    final PublishRequest request
+  ) throws IOException, InterruptedException {
+    final HttpRequest httpRequest = HttpRequest.newBuilder()
+      .uri(URI.create(extension.getApiUrl().get() + "/v3/publish"))
+      .header("Authorization", apiToken)
+      .header("Content-Type", "application/json")
+      .header("User-Agent", USER_AGENT)
+      .POST(HttpRequest.BodyPublishers.ofString(MapperHolder.MAPPER.writeValueAsString(request)))
+      .build();
+    final HttpResponse<String> response = this.httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+    if (response.statusCode() != 201) {
+      throw new IOException("Failed to publish build: " + response.statusCode() + ": " + response.body());
+    }
+  }
+
+  private static String contentMd5(final byte[] content) {
+    try {
+      return Base64.getEncoder().encodeToString(MessageDigest.getInstance("MD5").digest(content));
+    } catch (final NoSuchAlgorithmException e) {
+      throw new AssertionError(e);
+    }
+  }
+
+  private record PendingUpload(Download download, byte[] content, String contentMd5) {
   }
 
   private List<Commit> gatherCommits(Git git, FillExtension extension) {
