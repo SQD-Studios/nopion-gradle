@@ -70,6 +70,7 @@ import org.jspecify.annotations.NullMarked;
 @UntrackedTask(because = "PublishToFillTask should always run when requested")
 public abstract class PublishToFillTask extends DefaultTask implements AutoCloseable {
   public static final String NAME = "publishToFill";
+  private static final String APPLICATION_JAVA_ARCHIVE = "application/java-archive";
   private static final String USER_AGENT = "Fill (Gradle Plugin)";
   private final HttpClient httpClient = HttpClient.newBuilder()
     .build();
@@ -138,7 +139,7 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
         final int size = content.length;
         final Download requestDownload = new Download(name, new Checksums(sha256), size);
         downloads.put(key, requestDownload);
-        uploads.add(new PendingUpload(requestDownload, content, contentMd5(content)));
+        uploads.add(new PendingUpload(requestDownload, content, APPLICATION_JAVA_ARCHIVE, contentMd5(content)));
       }
 
       for (final PendingUpload upload : uploads) {
@@ -174,7 +175,7 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
     final UUID id,
     final PendingUpload upload
   ) throws IOException, InterruptedException {
-    final UploadRequest request = new UploadRequest(id, upload.download(), upload.contentMd5());
+    final UploadRequest request = new UploadRequest(id, upload.download(), upload.contentType(), upload.contentMd5());
     final HttpRequest httpRequest = HttpRequest.newBuilder()
       .uri(URI.create(extension.getApiUrl().get() + "/v3/upload"))
       .header("Authorization", apiToken)
@@ -193,7 +194,7 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
     final HttpRequest request = HttpRequest.newBuilder()
       .uri(uploadUrl)
       .header("Content-MD5", upload.contentMd5())
-      .header("Content-Type", "application/java-archive")
+      .header("Content-Type", upload.contentType())
       .header("x-amz-meta-sha256", upload.download().checksums().sha256())
       .PUT(HttpRequest.BodyPublishers.ofByteArray(upload.content()))
       .build();
@@ -229,7 +230,7 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
     }
   }
 
-  private record PendingUpload(Download download, byte[] content, String contentMd5) {
+  private record PendingUpload(Download download, byte[] content, String contentType, String contentMd5) {
   }
 
   private List<Commit> gatherCommits(Git git, FillExtension extension) {
