@@ -13,14 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.papermc.fill.model.response;
+package io.papermc.fill.model;
 
-import java.net.URI;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
-public record UploadResponse(
-  boolean ok,
-  URI url
+public record JavaVersion(
+  int minimum
 ) {
 }

@@ -15,6 +15,7 @@
  */
 package io.papermc.fill.model;
 
+import java.net.URI;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
@@ -22,5 +23,8 @@ public record Download(
   String name,
   Checksums checksums,
   int size
-) {
+) implements AbstractDownload {
+  public DownloadWithUrl withUrl(final URI url) {
+    return new DownloadWithUrl(this.name, this.checksums, this.size, url);
+  }
 }

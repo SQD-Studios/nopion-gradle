@@ -15,9 +15,11 @@
  */
 package io.papermc.fill.model.response.v3;
 
-import org.jspecify.annotations.NullMarked;
 import java.util.List;
+import org.jspecify.annotations.NullMarked;
 
 @NullMarked
-public record VersionsResponse(List<VersionResponse> versions) {
+public record VersionsResponse(
+  List<VersionResponse> versions
+) {
 }

@@ -24,11 +24,12 @@ import io.papermc.fill.gradle.FillExtension;
 import io.papermc.fill.model.Checksums;
 import io.papermc.fill.model.Commit;
 import io.papermc.fill.model.Download;
-import io.papermc.fill.model.request.PublishRequest;
-import io.papermc.fill.model.request.UploadRequest;
-import io.papermc.fill.model.response.UploadResponse;
+import io.papermc.fill.model.request.v3.PublishRequest;
+import io.papermc.fill.model.request.v3.StageRequest;
 import io.papermc.fill.model.response.v3.BuildResponse;
+import io.papermc.fill.model.response.v3.StageResponse;
 import io.papermc.fill.model.response.v3.VersionResponse;
+import io.papermc.fill.model.response.v3.VersionsResponse;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -49,7 +50,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 import javax.inject.Inject;
-import io.papermc.fill.model.response.v3.VersionsResponse;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.errors.MissingObjectException;
 import org.eclipse.jgit.lib.Constants;
@@ -107,7 +107,7 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
     final String familyId = extension.getVersionFamily().get();
     final String versionId = extension.getVersion().get();
     final FillExtension.Build build = extension.getBuild();
-    final int buildId = build.getId().get();
+    final int buildNumber = build.getId().get();
     final String timeString = this.getExtension().get().getBuildTimestamp().getOrNull();
     final Instant time;
     if (timeString != null) {
@@ -132,7 +132,7 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
     try {
       for (final FillExtension.Download download : build.getDownloads()) {
         final String key = download.getName();
-        final String name = download.getNameResolver().get().name(project, familyId, versionId, buildId);
+        final String name = download.getNameResolver().get().name(project, familyId, versionId, buildNumber);
         final Path path = download.getFile().get().getAsFile().toPath();
         final byte[] content = Files.readAllBytes(path);
         final String sha256 = Hashing.sha256().hashBytes(content).toString();
@@ -152,7 +152,7 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
         project,
         familyId,
         versionId,
-        buildId,
+        buildNumber,
         time,
         build.getChannel().get(),
         commits.reversed(),
@@ -175,9 +175,9 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
     final UUID id,
     final PendingUpload upload
   ) throws IOException, InterruptedException {
-    final UploadRequest request = new UploadRequest(id, upload.download(), upload.contentType(), upload.contentMd5());
+    final StageRequest request = new StageRequest(id, upload.download(), upload.contentType(), upload.contentMd5());
     final HttpRequest httpRequest = HttpRequest.newBuilder()
-      .uri(URI.create(extension.getApiUrl().get() + "/v3/upload"))
+      .uri(URI.create(extension.getApiUrl().get() + "/v3/publishing/stage"))
       .header("Authorization", apiToken)
       .header("Content-Type", "application/json")
       .header("User-Agent", USER_AGENT)
@@ -187,7 +187,7 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
     if (response.statusCode() != 200) {
       throw new IOException("Failed to create upload URL: " + response.statusCode() + ": " + response.body());
     }
-    return MapperHolder.MAPPER.readValue(response.body(), UploadResponse.class).url();
+    return MapperHolder.MAPPER.readValue(response.body(), StageResponse.class).url();
   }
 
   private void upload(final URI uploadUrl, final PendingUpload upload) throws IOException, InterruptedException {
@@ -210,7 +210,7 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
     final PublishRequest request
   ) throws IOException, InterruptedException {
     final HttpRequest httpRequest = HttpRequest.newBuilder()
-      .uri(URI.create(extension.getApiUrl().get() + "/v3/publish"))
+      .uri(URI.create(extension.getApiUrl().get() + "/v3/publishing/publish"))
       .header("Authorization", apiToken)
       .header("Content-Type", "application/json")
       .header("User-Agent", USER_AGENT)

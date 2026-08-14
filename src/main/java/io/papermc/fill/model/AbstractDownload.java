@@ -18,8 +18,8 @@ package io.papermc.fill.model;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
-public record Java(
-  JavaVersion version,
-  JavaFlags flags
-) {
+public interface AbstractDownload extends Named {
+  Checksums checksums();
+
+  int size();
 }

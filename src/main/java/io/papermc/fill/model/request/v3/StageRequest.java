@@ -13,14 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.papermc.fill.model.request;
+package io.papermc.fill.model.request.v3;
 
 import io.papermc.fill.model.Download;
 import java.util.UUID;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
-public record UploadRequest(
+public record StageRequest(
   UUID id,
   Download download,
   String contentType,
