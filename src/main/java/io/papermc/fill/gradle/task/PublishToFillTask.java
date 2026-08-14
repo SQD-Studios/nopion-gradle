@@ -169,6 +169,11 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
     }
   }
 
+  private static String apiUrl(final FillExtension extension) {
+    final String url = extension.getApiUrl().get();
+    return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+  }
+
   private URI requestUploadUrl(
     final FillExtension extension,
     final String apiToken,
@@ -177,7 +182,7 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
   ) throws IOException, InterruptedException {
     final StageRequest request = new StageRequest(id, upload.download(), upload.contentType(), upload.contentMd5());
     final HttpRequest httpRequest = HttpRequest.newBuilder()
-      .uri(URI.create(extension.getApiUrl().get() + "/v3/publishing/stage"))
+      .uri(URI.create(apiUrl(extension) + "/v3/publishing/stage"))
       .header("Authorization", apiToken)
       .header("Content-Type", "application/json")
       .header("User-Agent", USER_AGENT)
@@ -210,7 +215,7 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
     final PublishRequest request
   ) throws IOException, InterruptedException {
     final HttpRequest httpRequest = HttpRequest.newBuilder()
-      .uri(URI.create(extension.getApiUrl().get() + "/v3/publishing/publish"))
+      .uri(URI.create(apiUrl(extension) + "/v3/publishing/publish"))
       .header("Authorization", apiToken)
       .header("Content-Type", "application/json")
       .header("User-Agent", USER_AGENT)
@@ -352,7 +357,7 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
   private VersionsResponse getVersions(final FillExtension extension) {
     final String url = String.format(
       "%s/v3/projects/%s/versions",
-      extension.getApiUrl().get(),
+      apiUrl(extension),
       extension.getProject().get()
     );
     try {
@@ -376,7 +381,7 @@ public abstract class PublishToFillTask extends DefaultTask implements AutoClose
   private List<BuildResponse> getBuilds(final FillExtension extension, final String version) {
     final String url = String.format(
       "%s/v3/projects/%s/versions/%s/builds",
-      extension.getApiUrl().get(),
+      apiUrl(extension),
       extension.getProject().get(),
       version
     );
