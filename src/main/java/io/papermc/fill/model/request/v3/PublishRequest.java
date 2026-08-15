@@ -13,13 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.papermc.fill.model;
+package io.papermc.fill.model.request.v3;
 
+import io.papermc.fill.model.BuildChannel;
+import io.papermc.fill.model.Commit;
+import io.papermc.fill.model.Download;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
-public record Java(
-  JavaVersion version,
-  JavaFlags flags
+public record PublishRequest(
+  UUID id,
+  String project,
+  String family,
+  String version,
+  @Deprecated(forRemoval = true)
+  int build,
+  Instant time,
+  BuildChannel channel,
+  List<Commit> commits,
+  Map<String, Download> downloads
 ) {
 }

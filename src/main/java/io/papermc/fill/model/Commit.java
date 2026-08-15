@@ -18,11 +18,17 @@ package io.papermc.fill.model;
 import java.time.Instant;
 import org.jspecify.annotations.NullMarked;
 
-// TODO: include author?
 @NullMarked
 public record Commit(
   String sha,
   Instant time,
   String message
 ) {
+  public static String getShortSha(final Commit commit) {
+    return commit.sha().substring(0, 7);
+  }
+
+  public String summary() {
+    return this.message.split("\\R")[0];
+  }
 }

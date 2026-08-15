@@ -22,7 +22,6 @@ import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.ProviderFactory;
 import org.jspecify.annotations.NullMarked;
-import java.time.Instant;
 
 @NullMarked
 public class FillExtensionImpl implements FillExtension {

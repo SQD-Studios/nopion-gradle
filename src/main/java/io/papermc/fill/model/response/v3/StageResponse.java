@@ -13,13 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.papermc.fill.model;
+package io.papermc.fill.model.response.v3;
 
+import java.net.URI;
 import org.jspecify.annotations.NullMarked;
 
 @NullMarked
-public record Java(
-  JavaVersion version,
-  JavaFlags flags
+public record StageResponse(
+  boolean ok,
+  URI url
 ) {
 }

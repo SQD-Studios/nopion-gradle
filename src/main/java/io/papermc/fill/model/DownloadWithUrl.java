@@ -24,5 +24,5 @@ public record DownloadWithUrl(
   Checksums checksums,
   int size,
   URI url
-) {
+) implements AbstractDownload {
 }
