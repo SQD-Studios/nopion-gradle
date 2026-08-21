@@ -6,37 +6,25 @@ plugins {
 }
 
 gradlePlugin {
-  website = "https://github.com/PaperMC/fill-gradle"
-  vcsUrl = "https://github.com/PaperMC/fill-gradle"
+  website = "https://github.com/SQD-Studios/nopion-gradle"
+  vcsUrl = "https://github.com/SQD-Studios/nopion-gradle"
 
-  plugins.register("fill") {
-    id = "io.papermc.fill.gradle"
-    displayName = "Fill"
-    description = "Gradle plugin for publishing to Fill"
-    tags = listOf("fill", "publishing")
-    implementationClass = "io.papermc.fill.gradle.FillPlugin"
+  plugins.register("nopion") {
+    id = "net.chamosmp.nopion.gradle"
+    displayName = "Nopion"
+    description = "Gradle plugin for publishing to Nopion"
+    tags = listOf("nopion", "publishing")
+    implementationClass = "net.chamosmp.nopion.gradle.NopionPlugin"
   }
 }
 
 indra {
   apache2License()
 
-  github("papermc", "fill-gradle")
+  github("sqd-studios", "nopion-gradle")
 
   javaVersions {
     target(21)
-  }
-}
-
-publishing {
-  repositories {
-    maven("https://repo.papermc.io/repository/maven-snapshots/") {
-      name = "papermc"
-      credentials(PasswordCredentials::class)
-      mavenContent {
-        snapshotsOnly()
-      }
-    }
   }
 }
 
