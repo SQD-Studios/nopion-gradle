@@ -1,3 +1,5 @@
+import org.gradle.plugin.compatibility.compatibility
+
 plugins {
   id("java-gradle-plugin")
   alias(libs.plugins.publish.plugin)
@@ -15,6 +17,12 @@ gradlePlugin {
     description = "Gradle plugin for publishing to Nopion"
     tags = listOf("nopion", "publishing")
     implementationClass = "net.chamosmp.nopion.gradle.NopionPlugin"
+
+    compatibility {
+      features {
+        configurationCache = true
+      }
+    }
   }
 }
 
